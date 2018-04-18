@@ -9,7 +9,7 @@
 
 // STEP 1 [REQUIRED]
 // Uncomment / comment the appropriate set of includes for your hardware (OPTION A, B or C)
-// Arduino MKR1000 or ESP8266 are enabled by default if compiling for either of those boards.
+// Arduino MKR1000, ESP8266 or ESP32 are enabled by default if compiling for either of those boards.
 
 /*
  * OPTION A: Configure for Arduino MKR1000 or Arduino WiFi Shield 101
@@ -101,6 +101,30 @@
  * StandardFirmataWiFi.
  * For HUZZAH with ESP8266 use ESP8266_WIFI.
  */
+
+ /*
+ * OPTION E: Configure for ESP32
+ *
+ * This will configure ConfigurableFirmataWiFi to use the ESP32 WiFi library for boards
+ * with an ESP32 chip. It is compatible with 802.11 B/G/N networks.
+ *
+ * The appropriate libraries are included automatically when compiling for the ESP32 so
+ * continue on to STEP 2.
+ *
+ * IMPORTANT: You must have the esp32 board support installed. To easily install this board see
+ * the instructions here: https://github.com/espressif/arduino-esp32#installation-instructions.
+ */
+#ifdef ESP32
+#define ESP32_WIFI
+#include <WiFi.h>
+#include "utility/WiFiClientStream.h"
+#include "utility/WiFiServerStream.h"
+  #ifdef WIFI_LIB_INCLUDED
+  #define MULTIPLE_WIFI_LIB_INCLUDES
+  #else
+  #define WIFI_LIB_INCLUDED
+  #endif
+#endif
 
 //------------------------------
 // TODO
@@ -202,7 +226,7 @@ char wep_key[] = "your_wep_key";
 #error "you must define a wifi security type in wifiConfig.h."
 #endif  //WIFI_* security define check
 
-#if (defined(ESP8266_WIFI) && !(defined(WIFI_NO_SECURITY) || (defined(WIFI_WPA_SECURITY))))
+#if ((defined(ESP8266_WIFI) || defined(ESP32_WIFI)) && !(defined(WIFI_NO_SECURITY) || (defined(WIFI_WPA_SECURITY))))
 #error "you must choose between WIFI_NO_SECURITY and WIFI_WPA_SECURITY"
 #endif
 
@@ -236,5 +260,8 @@ char wep_key[] = "your_wep_key";
 
 #elif defined(ESP8266_WIFI) && defined(SERIAL_DEBUG)
 #define IS_IGNORE_PIN(p)  ((p) == 1)
+
+#elif defined(ESP32_WIFI) && defined(SERIAL_DEBUG)
+#define IS_IGNORE_PIN(p)  ((p) == 1 || (p) == 3)
 
 #endif

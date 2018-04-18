@@ -38,6 +38,7 @@
   - Arduino WiFi Shield 101
   - Arduino MKR1000 board
   - ESP8266 WiFi board compatible with ESP8266 Arduino core
+  - ESP32 Wifi board compatible with ESP32 Arduino core
 
   Follow the instructions in the wifiConfig.h file (wifiConfig.h tab in Arduino IDE) to
   configure your particular hardware.
@@ -71,9 +72,13 @@
 
   - Arduino Due or Zero: (D5, D7, D10)
   - Arduino Mega: (D5, D7, D10, D50, D52, D53)
+  
+  NOTE: If you are using an ESP32 board, analog write and serve support are disabled
 */
 
+#if !ESP32
 #include <Servo.h>
+#endif
 #include <Wire.h>
 #include <Firmata.h>
 
@@ -82,7 +87,7 @@
  * connection that may help in the event of connection issues. If defined, some boards may not begin
  * executing this sketch until the Serial console is opened.
  */
-//#define SERIAL_DEBUG
+#define SERIAL_DEBUG
 #include "utility/firmataDebug.h"
 
 /*
@@ -166,11 +171,13 @@ signed char queryIndex = -1;
 // default delay time between i2c read request and Wire.requestFrom()
 unsigned int i2cReadDelayTime = 0;
 
+#if !ESP32
 Servo servos[MAX_SERVOS];
 byte servoPinMap[TOTAL_PINS];
 byte detachedServos[MAX_SERVOS];
 byte detachedServoCount = 0;
 byte servoCount = 0;
+#endif
 
 boolean isResetting = false;
 
@@ -203,6 +210,7 @@ byte wireRead(void)
  * FUNCTIONS
  *============================================================================*/
 
+#if !ESP32
 void attachServo(byte pin, int minPulse, int maxPulse)
 {
   if (servoCount < MAX_SERVOS) {
@@ -240,6 +248,7 @@ void detachServo(byte pin)
 
   servoPinMap[pin] = 255;
 }
+#endif
 
 void enableI2CPins()
 {
@@ -359,11 +368,13 @@ void setPinModeCallback(byte pin, int mode)
     // the following if statements should reconfigure the pins properly
     disableI2CPins();
   }
+#if !ESP32
   if (IS_PIN_DIGITAL(pin) && mode != PIN_MODE_SERVO) {
     if (servoPinMap[pin] < MAX_SERVOS && servos[servoPinMap[pin]].attached()) {
       detachServo(pin);
     }
   }
+#endif
   if (IS_PIN_ANALOG(pin)) {
     reportAnalogCallback(PIN_TO_ANALOG(pin), mode == PIN_MODE_ANALOG ? 1 : 0); // turn on/off reporting
   }
@@ -388,7 +399,7 @@ void setPinModeCallback(byte pin, int mode)
         Firmata.setPinMode(pin, PIN_MODE_ANALOG);
       }
       break;
-    case INPUT:
+    case PIN_MODE_INPUT:
       if (IS_PIN_DIGITAL(pin)) {
         pinMode(PIN_TO_DIGITAL(pin), INPUT);    // disable output driver
 #if ARDUINO <= 100
@@ -405,7 +416,7 @@ void setPinModeCallback(byte pin, int mode)
         Firmata.setPinState(pin, 1);
       }
       break;
-    case OUTPUT:
+    case PIN_MODE_OUTPUT:
       if (IS_PIN_DIGITAL(pin)) {
         if (Firmata.getPinMode(pin) == PIN_MODE_PWM) {
           // Disable PWM if pin mode was previously set to PWM.
@@ -415,6 +426,7 @@ void setPinModeCallback(byte pin, int mode)
         Firmata.setPinMode(pin, OUTPUT);
       }
       break;
+#if !ESP32
     case PIN_MODE_PWM:
       if (IS_PIN_PWM(pin)) {
         pinMode(PIN_TO_PWM(pin), OUTPUT);
@@ -432,6 +444,7 @@ void setPinModeCallback(byte pin, int mode)
         }
       }
       break;
+#endif
     case PIN_MODE_I2C:
       if (IS_PIN_I2C(pin)) {
         // mark the pin as i2c
@@ -466,6 +479,7 @@ void setPinValueCallback(byte pin, int value)
   }
 }
 
+#if !ESP32
 void analogWriteCallback(byte pin, int value)
 {
   if (pin < TOTAL_PINS) {
@@ -483,6 +497,7 @@ void analogWriteCallback(byte pin, int value)
     }
   }
 }
+#endif
 
 void digitalWriteCallback(byte port, int value)
 {
@@ -684,6 +699,7 @@ void sysexCallback(byte command, byte argc, byte *argv)
       }
 
       break;
+#if !ESP32
     case SERVO_CONFIG:
       if (argc > 4) {
         // these vars are here for clarity, they'll optimized away by the compiler
@@ -700,6 +716,7 @@ void sysexCallback(byte command, byte argc, byte *argv)
         }
       }
       break;
+#endif
     case SAMPLING_INTERVAL:
       if (argc > 1) {
         samplingInterval = argv[0] + (argv[1] << 7);
@@ -710,6 +727,7 @@ void sysexCallback(byte command, byte argc, byte *argv)
         //Firmata.sendString("Not enough data");
       }
       break;
+#if !ESP32
     case EXTENDED_ANALOG:
       if (argc > 1) {
         int val = argv[1];
@@ -718,6 +736,7 @@ void sysexCallback(byte command, byte argc, byte *argv)
         analogWriteCallback(argv[0], val);
       }
       break;
+#endif
     case CAPABILITY_QUERY:
       Firmata.write(START_SYSEX);
       Firmata.write(CAPABILITY_RESPONSE);
@@ -821,13 +840,17 @@ void systemResetCallback()
       setPinModeCallback(i, OUTPUT);
     }
 
+#if !ESP32
     servoPinMap[i] = 255;
+#endif
   }
   // by default, do not report any analog inputs
   analogInputsToReport = 0;
 
+#if !ESP32
   detachedServoCount = 0;
   servoCount = 0;
+#endif
 
   /* send digital inputs to set the initial state on the host computer,
    * since once in the loop(), this firmware will only send on change */
@@ -929,6 +952,8 @@ void initTransport()
   DEBUG_PRINTLN( "using the ESP8266 WiFi library." );
 #elif defined(HUZZAH_WIFI)
   DEBUG_PRINTLN( "using the HUZZAH WiFi library." );
+#elif defined(ESP32_WIFI)
+  DEBUG_PRINTLN( "using the ESP32 Wifi library." );
   //else should never happen here as error-checking in wifiConfig.h will catch this
 #endif  //defined(WIFI_101)
 
@@ -976,7 +1001,9 @@ void initTransport()
 void initFirmata()
 {
   Firmata.setFirmwareVersion(FIRMATA_FIRMWARE_MAJOR_VERSION, FIRMATA_FIRMWARE_MINOR_VERSION);
+#if !ESP32
   Firmata.attach(ANALOG_MESSAGE, analogWriteCallback);
+#endif
   Firmata.attach(DIGITAL_MESSAGE, digitalWriteCallback);
   Firmata.attach(REPORT_ANALOG, reportAnalogCallback);
   Firmata.attach(REPORT_DIGITAL, reportDigitalCallback);
@@ -994,7 +1021,8 @@ void initFirmata()
 
 void setup()
 {
-  DEBUG_BEGIN(9600);
+  // ESP32 booting info is at 115200 too
+  DEBUG_BEGIN(115200);
 
   initTransport();
 
